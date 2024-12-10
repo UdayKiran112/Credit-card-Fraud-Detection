@@ -3,3 +3,8 @@ pandas
 numpy
 scikit-learn
 matplotlib
+joblib
+xgboost
+streamlit
+shap
+dash
