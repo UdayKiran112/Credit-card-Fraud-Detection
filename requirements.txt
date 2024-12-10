@@ -8,3 +8,6 @@ xgboost
 streamlit
 shap
 dash
+plotly
+flask
+flask-caching

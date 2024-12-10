@@ -1,131 +1,109 @@
 import dash
 from dash import dcc, html
+import shap
+import joblib
+import pickle
 import base64
 import os
+from flask_caching import Cache
+import matplotlib.pyplot as plt
+import matplotlib
+import numpy as np
+import plotly.graph_objs as go
 
+# Set the matplotlib backend to avoid GUI-related issues
+matplotlib.use('Agg')
+
+# Initialize Dash app and Flask caching
+app = dash.Dash(__name__)
+app.title = "SHAP Explainability Dashboard"
+cache = Cache(app.server, config={'CACHE_TYPE': 'filesystem', 'CACHE_DIR': 'cache_dir'})
+
+# Load the trained model and dataset
+best_model = joblib.load('../Models/fraud_detection_xgboost_model.pkl')
+X_test = pickle.load(open('../dataset/splits_pkl/X_test.pkl', 'rb'))
+
+# Handle NaN or Inf values by replacing them with zeros (or use another imputation strategy)
+X_test = X_test.replace([np.inf, -np.inf], np.nan)
+X_test = X_test.fillna(0)
+
+# Create SHAP explainer and calculate SHAP values
+explainer = shap.TreeExplainer(best_model)
+shap_values = explainer.shap_values(X_test)
+
+# Cache the dependence plot generation to avoid recalculating every time
+@cache.memoize(timeout=60)  # Cache for 60 seconds
+def generate_dependence_plot(feature):
+    fig = plt.figure(figsize=(10, 6))
+    shap.dependence_plot(feature, shap_values, X_test, show=False)
+    plot_path = "shap_visualizations/dependence_plot.png"
+    plt.savefig(plot_path, dpi=300)  # Save the plot as a high-resolution image
+    plt.close()
+    return plot_path
+
+# Function to encode the image to base64 for embedding in Dash
 def encode_image(image_path):
-    """
-    Encodes an image file to base64 for rendering in Dash.
-
-    Parameters:
-        image_path (str): Path to the image file.
-
-    Returns:
-        str: Base64 encoded image string.
-    """
     with open(image_path, 'rb') as image_file:
         encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
     return f"data:image/png;base64,{encoded_image}"
 
-# Define the Dash app
-app = dash.Dash(__name__)
-app.title = "SHAP Explainability Dashboard"
-
-# Paths to SHAP visualizations
-summary_plot_path = "shap_visualizations/summary_plot.png"
-importance_plot_path = "shap_visualizations/feature_importance.png"
-force_plot_path = "shap_visualizations/force_plot.html"
-dependence_plot_path = "shap_visualizations/dependence_plot_V1.png"
-
-# Load the force plot HTML
-force_plot_html_path = "shap_visualizations/force_plot.html"
-with open(force_plot_html_path, "rb") as f:
-    force_plot_html = f.read().decode('utf-8', 'ignore')
-
-# Define the app layout with better styling
+# Dash app layout
 app.layout = html.Div(
+    style={'backgroundColor': '#f7f7f7', 'padding': '20px'},  # Background color for the page
     children=[
+        html.H1(
+            "Fraud Detection - SHAP Explainability Dashboard",
+            style={'textAlign': 'center', 'color': '#2C3E50', 'fontSize': '32px', 'fontFamily': 'Arial, sans-serif'}
+        ),
         html.Div(
+            style={'maxWidth': '1200px', 'margin': '0 auto', 'backgroundColor': 'white', 'padding': '20px', 'borderRadius': '10px', 'boxShadow': '0 4px 8px rgba(0,0,0,0.1)'},
             children=[
-                html.H1(
-                    children="Fraud Detection - SHAP Explainability Dashboard",
+                html.H2("Summary Plot", style={'color': '#2C3E50', 'fontSize': '24px', 'fontWeight': 'bold'}),
+                html.Img(
+                    src=encode_image("shap_visualizations/summary_plot.png"),
+                    style={'width': '100%', 'maxWidth': '900px', 'height': 'auto', 'marginBottom': '20px', 'borderRadius': '8px'}
+                ),
+                
+                html.H2("Feature Importance Plot", style={'color': '#2C3E50', 'fontSize': '24px', 'fontWeight': 'bold'}),
+                html.Img(
+                    src=encode_image("shap_visualizations/feature_importance.png"),
+                    style={'width': '100%', 'maxWidth': '900px', 'height': 'auto', 'marginBottom': '20px', 'borderRadius': '8px'}
+                ),
+                
+                html.H2("Dependence Plot", style={'color': '#2C3E50', 'fontSize': '24px', 'fontWeight': 'bold'}),
+                dcc.Dropdown(
+                    id='feature-dropdown',
+                    options=[{'label': feature, 'value': feature} for feature in X_test.columns],
+                    value=X_test.columns[0],
                     style={
-                        'textAlign': 'center',
-                        'color': '#4CAF50',
-                        'fontSize': '36px',
-                        'fontFamily': 'Arial, sans-serif',
-                        'marginTop': '20px'
+                        'width': '50%', 
+                        'height': '40px',
+                        'marginBottom': '20px', 
+                        'marginTop': '20px', 
+                        'borderRadius': '5px', 
+                        'backgroundColor': '#ecf0f1',
+                        'border': '1px solid #bdc3c7',
+                        'fontSize': '16px',  # Added for better readability
+                        'paddingLeft': '10px',
                     }
                 ),
-                html.Div(
-                    children=[
-                        # Summary Plot
-                        html.Div(
-                            children=[
-                                html.H2(
-                                    children="Summary Plot",
-                                    style={'textAlign': 'center', 'color': '#333', 'fontFamily': 'Arial, sans-serif'}
-                                ),
-                                html.Img(
-                                    src=encode_image(summary_plot_path),
-                                    style={'width': '100%', 'maxWidth': '900px', 'height': 'auto', 'marginBottom': '20px'}
-                                ),
-                            ],
-                            style={'padding': '10px', 'backgroundColor': '#f4f4f9', 'borderRadius': '8px', 'boxShadow': '0 4px 8px rgba(0, 0, 0, 0.1)', 'margin': '10px'}
-                        ),
-                        
-                        # Feature Importance Plot
-                        html.Div(
-                            children=[
-                                html.H2(
-                                    children="Feature Importance Plot",
-                                    style={'textAlign': 'center', 'color': '#333', 'fontFamily': 'Arial, sans-serif'}
-                                ),
-                                html.Img(
-                                    src=encode_image(importance_plot_path),
-                                    style={'width': '100%', 'maxWidth': '900px', 'height': 'auto', 'marginBottom': '20px'}
-                                ),
-                            ],
-                            style={'padding': '10px', 'backgroundColor': '#f4f4f9', 'borderRadius': '8px', 'boxShadow': '0 4px 8px rgba(0, 0, 0, 0.1)', 'margin': '10px'}
-                        ),
-                        
-                        # Force Plot
-                        html.Div(
-                            children=[
-                                html.H2(
-                                    children="Force Plot",
-                                    style={'textAlign': 'center', 'color': '#333', 'fontFamily': 'Arial, sans-serif'}
-                                ),
-                                html.Div(
-                                    children=[
-                                        html.Iframe(
-                                            srcDoc=force_plot_html,
-                                            style={'width': '100%', 'height': '600px', 'border': 'none', 'borderRadius': '8px'}
-                                        ),
-                                    ],
-                                    style={'padding': '10px', 'backgroundColor': '#f4f4f9', 'borderRadius': '8px', 'boxShadow': '0 4px 8px rgba(0, 0, 0, 0.1)', 'margin': '10px'}
-                                ),
-                            ]
-                        ),
-                        
-                        # Dependence Plot
-                        html.Div(
-                            children=[
-                                html.H2(
-                                    children="Dependence Plot",
-                                    style={'textAlign': 'center', 'color': '#333', 'fontFamily': 'Arial, sans-serif'}
-                                ),
-                                html.Img(
-                                    src=encode_image(dependence_plot_path),
-                                    style={'width': '100%', 'maxWidth': '900px', 'height': 'auto', 'marginBottom': '20px'}
-                                ),
-                            ],
-                            style={'padding': '10px', 'backgroundColor': '#f4f4f9', 'borderRadius': '8px', 'boxShadow': '0 4px 8px rgba(0, 0, 0, 0.1)', 'margin': '10px'}
-                        ),
-                    ],
-                    style={'marginTop': '50px', 'padding': '20px'}
+                html.Img(
+                    id='dependence-plot',
+                    style={'width': '100%', 'maxWidth': '900px', 'height': 'auto', 'borderRadius': '8px'}
                 ),
             ]
         ),
-    ],
-    style={
-        'fontFamily': 'Arial, sans-serif',
-        'backgroundColor': '#e8f4f8',
-        'minHeight': '100vh',
-        'padding': '20px'
-    }
+    ]
 )
 
-# Run the app
+# Callback to update the dependence plot based on selected feature
+@app.callback(
+    dash.dependencies.Output('dependence-plot', 'src'),
+    [dash.dependencies.Input('feature-dropdown', 'value')]
+)
+def update_dependence_plot(feature):
+    plot_path = generate_dependence_plot(feature)
+    return encode_image(plot_path)
+
 if __name__ == "__main__":
     app.run_server(debug=True)
