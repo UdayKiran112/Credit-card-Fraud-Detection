@@ -9,6 +9,9 @@ from flask_caching import Cache
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
+import warnings
+
+warnings.filterwarnings("ignore")
 
 # Set the matplotlib backend to avoid GUI-related issues
 matplotlib.use("Agg")
@@ -41,17 +44,11 @@ if isinstance(explainer.expected_value, list) or isinstance(
 else:
     expected_value = explainer.expected_value
 
-# Generate the force plot
-fig = shap.force_plot(
-    expected_value,
-    shap_values[0],  # Use shap_values directly for binary classification
-    X_test.iloc[0, :],
-    matplotlib=True,  # Use matplotlib rendering
+# Save force plot as an HTML file
+shap.save_html(
+    "assets/force_plot.html",
+    shap.force_plot(expected_value, shap_values[0], X_test.iloc[0, :]),
 )
-
-# Save the force plot as an image
-plt.savefig("assets/force_plot.png", dpi=300, bbox_inches="tight")
-plt.close()
 
 
 # Cache the dependence plot generation to avoid recalculating every time
@@ -60,7 +57,9 @@ def generate_dependence_plot(feature):
     fig = plt.figure(figsize=(10, 6))
     shap.dependence_plot(feature, shap_values, X_test, show=False)
     plot_path = "shap_visualizations/dependence_plot.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches="tight")  # Save plot as high-resolution image
+    plt.savefig(
+        plot_path, dpi=300, bbox_inches="tight"
+    )  # Save plot as high-resolution image
     plt.close()
     return plot_path
 
@@ -79,14 +78,26 @@ app.layout = html.Div(
         "padding": "20px",
     },
     children=[
-        html.H1(
-            "Fraud Detection - SHAP Explainability Dashboard",
+        html.Div(
             style={
+                "backgroundColor": "#34495e",
+                "color": "#ecf0f1",
                 "textAlign": "center",
-                "color": "#2C3E50",
-                "fontSize": "32px",
-                "fontFamily": "Arial, sans-serif",
+                "padding": "20px",
+                "borderRadius": "10px",
+                "boxShadow": "0 4px 8px rgba(0, 0, 0, 0.2)",
+                "marginBottom": "20px",
             },
+            children=[
+                html.H1(
+                    "Fraud Detection - SHAP Explainability Dashboard",
+                    style={
+                        "fontSize": "32px",
+                        "fontFamily": "Arial, sans-serif",
+                        "margin": "0",
+                    },
+                )
+            ],
         ),
         html.Div(
             style={
@@ -98,13 +109,24 @@ app.layout = html.Div(
                 "boxShadow": "0 4px 8px rgba(0,0,0,0.1)",
             },
             children=[
-                html.H2(
-                    "Summary Plot",
+                html.Div(
                     style={
-                        "color": "#2C3E50",
-                        "fontSize": "24px",
-                        "fontWeight": "bold",
+                        "backgroundColor": "#1abc9c",
+                        "color": "#ffffff",
+                        "padding": "10px",
+                        "borderRadius": "5px",
+                        "marginBottom": "20px",
+                        "boxShadow": "0 2px 4px rgba(0, 0, 0, 0.2)",
                     },
+                    children=html.H2(
+                        "Summary Plot",
+                        style={
+                            "fontSize": "24px",
+                            "fontWeight": "bold",
+                            "margin": "0",
+                            "textAlign": "center",
+                        },
+                    ),
                 ),
                 html.Img(
                     src=encode_image("shap_visualizations/summary_plot.png"),
@@ -116,13 +138,24 @@ app.layout = html.Div(
                         "borderRadius": "8px",
                     },
                 ),
-                html.H2(
-                    "Feature Importance Plot",
+                html.Div(
                     style={
-                        "color": "#2C3E50",
-                        "fontSize": "24px",
-                        "fontWeight": "bold",
+                        "backgroundColor": "#3498db",
+                        "color": "#ffffff",
+                        "padding": "10px",
+                        "borderRadius": "5px",
+                        "marginBottom": "20px",
+                        "boxShadow": "0 2px 4px rgba(0, 0, 0, 0.2)",
                     },
+                    children=html.H2(
+                        "Feature Importance Plot",
+                        style={
+                            "fontSize": "24px",
+                            "fontWeight": "bold",
+                            "margin": "0",
+                            "textAlign": "center",
+                        },
+                    ),
                 ),
                 html.Img(
                     src=encode_image("shap_visualizations/feature_importance.png"),
@@ -134,34 +167,53 @@ app.layout = html.Div(
                         "borderRadius": "8px",
                     },
                 ),
-                html.H2(
-                    "Force Plot",
+                html.Div(
                     style={
-                        "color": "#2C3E50",
-                        "fontSize": "24px",
-                        "fontWeight": "bold",
-                        "marginBottom": "10px",  # Reduce gap below the title
+                        "backgroundColor": "#9b59b6",
+                        "color": "#ffffff",
+                        "padding": "10px",
+                        "borderRadius": "5px",
+                        "marginBottom": "20px",
+                        "boxShadow": "0 2px 4px rgba(0, 0, 0, 0.2)",
                     },
+                    children=html.H2(
+                        "Force Plot",
+                        style={
+                            "fontSize": "24px",
+                            "fontWeight": "bold",
+                            "margin": "0",
+                            "textAlign": "center",
+                        },
+                    ),
                 ),
-                html.Img(
-                    src=encode_image("assets/force_plot.png"),
+                html.Iframe(
+                    src="assets/force_plot.html",
                     style={
                         "width": "100%",
-                        "maxWidth": "900px",
-                        "height": "auto",
-                        "marginBottom": "20px",
-                        "borderRadius": "8px",
+                        "height": "600px",
                         "border": "1px solid #bdc3c7",
+                        "borderRadius": "8px",
+                        "marginBottom": "20px",
                     },
                 ),
-                html.H2(
-                    "Dependence Plot",
+                html.Div(
                     style={
-                        "color": "#2C3E50",
-                        "fontSize": "24px",
-                        "fontWeight": "bold",
-                        "marginBottom": "10px",
+                        "backgroundColor": "#e67e22",
+                        "color": "#ffffff",
+                        "padding": "10px",
+                        "borderRadius": "5px",
+                        "marginBottom": "20px",
+                        "boxShadow": "0 2px 4px rgba(0, 0, 0, 0.2)",
                     },
+                    children=html.H2(
+                        "Dependence Plot",
+                        style={
+                            "fontSize": "24px",
+                            "fontWeight": "bold",
+                            "margin": "0",
+                            "textAlign": "center",
+                        },
+                    ),
                 ),
                 dcc.Dropdown(
                     id="feature-dropdown",
@@ -176,8 +228,7 @@ app.layout = html.Div(
                         "marginBottom": "20px",
                         "marginTop": "10px",
                         "borderRadius": "5px",
-                        "backgroundColor": "#ecf0f1",
-                        "fontSize": "16px",  # Improved readability
+                        "fontSize": "16px",
                         "paddingLeft": "10px",
                     },
                 ),
