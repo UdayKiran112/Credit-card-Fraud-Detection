@@ -18,38 +18,40 @@ matplotlib.use("Agg")
 
 # Initialize Dash app and Flask caching
 app = dash.Dash(__name__)
-app.title = "SHAP Explainability Dashboard"
+app.title = "Logistic Regression - SHAP Explainability Dashboard"
 cache = Cache(app.server, config={"CACHE_TYPE": "filesystem", "CACHE_DIR": "cache_dir"})
 
-# Load the trained model and dataset
-best_model = joblib.load("../Models/fraud_detection_xgboost_model.pkl")
+# Load the trained logistic regression model and dataset
+best_model = joblib.load("../Models/fraud_detection_logistic_regression_model.pkl")
 X_test = pickle.load(open("../dataset/splits_pkl/X_test.pkl", "rb"))
 
 # Handle NaN or Inf values by replacing them with zeros
 X_test = X_test.replace([np.inf, -np.inf], np.nan)
 X_test = X_test.fillna(0)
 
-# Create SHAP explainer and calculate SHAP values
-explainer = shap.TreeExplainer(best_model)
+# Create SHAP explainer and calculate SHAP values using LinearExplainer
+explainer = shap.LinearExplainer(best_model, X_test)
 shap_values = explainer.shap_values(X_test)
 
-# Generate and save force plot as an image
-os.makedirs("assets", exist_ok=True)  # Ensure the 'assets' directory exists
+# Save a SHAP summary plot as an image
+os.makedirs("shap_visualizations", exist_ok=True)
+summary_plot_path = "shap_visualizations/summary_plot.png"
+shap.summary_plot(shap_values, X_test, show=False)
+plt.savefig(summary_plot_path, dpi=300, bbox_inches="tight")
+plt.close()
 
-# For binary classifiers, handle scalar expected_value
-if isinstance(explainer.expected_value, list) or isinstance(
-    explainer.expected_value, np.ndarray
-):
-    expected_value = explainer.expected_value[1]  # Positive class index
-else:
-    expected_value = explainer.expected_value
+# Save a SHAP feature importance plot
+feature_importance_path = "shap_visualizations/feature_importance.png"
+shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
+plt.savefig(feature_importance_path, dpi=300, bbox_inches="tight")
+plt.close()
 
 # Save force plot as an HTML file
+os.makedirs("assets", exist_ok=True)
 shap.save_html(
     "assets/force_plot.html",
-    shap.force_plot(expected_value, shap_values[0], X_test.iloc[0, :]),
+    shap.force_plot(explainer.expected_value, shap_values[0], X_test.iloc[0, :]),
 )
-
 
 # Cache the dependence plot generation to avoid recalculating every time
 @cache.memoize(timeout=60)  # Cache for 60 seconds
@@ -57,19 +59,15 @@ def generate_dependence_plot(feature):
     fig = plt.figure(figsize=(10, 6))
     shap.dependence_plot(feature, shap_values, X_test, show=False)
     plot_path = "shap_visualizations/dependence_plot.png"
-    plt.savefig(
-        plot_path, dpi=300, bbox_inches="tight"
-    )  # Save plot as high-resolution image
+    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.close()
     return plot_path
-
 
 # Function to encode the image to base64 for embedding in Dash
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
     return f"data:image/png;base64,{encoded_image}"
-
 
 # Dash app layout
 app.layout = html.Div(
@@ -90,7 +88,7 @@ app.layout = html.Div(
             },
             children=[
                 html.H1(
-                    "Fraud Detection - SHAP Explainability Dashboard",
+                    "Fraud Detection - Logistic Regression SHAP Dashboard",
                     style={
                         "fontSize": "32px",
                         "fontFamily": "Arial, sans-serif",
@@ -129,7 +127,7 @@ app.layout = html.Div(
                     ),
                 ),
                 html.Img(
-                    src=encode_image("shap_visualizations/summary_plot.png"),
+                    src=encode_image(summary_plot_path),
                     style={
                         "width": "100%",
                         "maxWidth": "900px",
@@ -158,7 +156,7 @@ app.layout = html.Div(
                     ),
                 ),
                 html.Img(
-                    src=encode_image("shap_visualizations/feature_importance.png"),
+                    src=encode_image(feature_importance_path),
                     style={
                         "width": "100%",
                         "maxWidth": "900px",
@@ -246,7 +244,6 @@ app.layout = html.Div(
     ],
 )
 
-
 # Callback to update the dependence plot based on selected feature
 @app.callback(
     dash.dependencies.Output("dependence-plot", "src"),
@@ -256,8 +253,5 @@ def update_dependence_plot(feature):
     plot_path = generate_dependence_plot(feature)
     return encode_image(plot_path)
 
-
 if __name__ == "__main__":
-    # Ensure the assets directory exists for saving plots
-    os.makedirs("assets", exist_ok=True)
     app.run_server(debug=True)
