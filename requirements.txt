@@ -6,6 +6,8 @@ scikit-learn
 matplotlib
 joblib
 xgboost
+optuna
+seaborn
 streamlit
 shap
 dash
